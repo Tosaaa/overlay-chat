@@ -1,0 +1,15 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "OverlayChat.Client (WPF)",
+      "type": "coreclr",
+      "request": "launch",
+      "preLaunchTask": "build OverlayChat.Client",
+      "program": "${workspaceFolder}/client/OverlayChat.Client/bin/Debug/net8.0-windows/OverlayChat.Client.dll",
+      "cwd": "${workspaceFolder}/client/OverlayChat.Client",
+      "console": "internalConsole",
+      "stopAtEntry": false
+    }
+  ]
+}

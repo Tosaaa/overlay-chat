@@ -1,0 +1,18 @@
+# Go
+server/bin/
+server/.env
+
+# .NET
+**/bin/
+**/obj/
+**/appsettings.json
+!**/appsettings.example.json
+
+# VS Code
+.vscode/*
+!.vscode/launch.json
+!.vscode/tasks.json
+
+
+# Publish
+publish*

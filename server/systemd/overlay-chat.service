@@ -1,0 +1,16 @@
+[Unit]
+Description=Overlay Chat WebSocket Server
+After=network.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/home/pi/overlay-chat/server
+Environment=PORT=8080
+Environment=ALLOWED_ORIGIN=https://chat.example.com
+ExecStart=/home/pi/overlay-chat/server/chat-server
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,22 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "build OverlayChat.Client",
+      "type": "shell",
+      "command": "dotnet",
+      "args": [
+        "build",
+        "OverlayChat.Client.csproj"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}/client/OverlayChat.Client"
+      },
+      "problemMatcher": "$msCompile",
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      }
+    }
+  ]
+}

@@ -1,0 +1,11 @@
+services:
+  chat-server:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    container_name: overlay-chat-server
+    env_file:
+      - ./server/.env
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
