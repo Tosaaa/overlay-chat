@@ -29,16 +29,24 @@ func NewWSHandler(hub *chat.Hub, cfg Config) http.HandlerFunc {
         room := strings.TrimSpace(r.URL.Query().Get("room"))
         key := strings.TrimSpace(r.URL.Query().Get("key"))
 
-        if cfg.RoomKey != "" && key != cfg.RoomKey {
-            http.Error(w, "unauthorized", http.StatusUnauthorized)
+        if room == "" {
+            room = "default"
+        }
+
+        // Check if the room has a specific key configured
+        if expectedKey, ok := cfg.RoomKeys[room]; ok {
+            if key != expectedKey {
+                http.Error(w, "unauthorized", http.StatusUnauthorized)
+                return
+            }
+        } else if len(cfg.RoomKeys) > 0 {
+            // If some keys are configured but this room isn't, deny access for safety
+            http.Error(w, "room not found or unauthorized", http.StatusUnauthorized)
             return
         }
 
         if name == "" {
             name = "anon"
-        }
-        if room == "" {
-            room = "default"
         }
 
         conn, err := upgrader.Upgrade(w, r, nil)
@@ -60,7 +68,6 @@ func isOriginAllowed(origin, allowed string) bool {
     origin = strings.TrimSpace(origin)
     allowed = strings.TrimSpace(allowed)
 
-    // Desktop clients often omit Origin. Allow it for native app compatibility.
     if origin == "" {
         return true
     }
