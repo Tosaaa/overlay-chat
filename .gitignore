@@ -15,4 +15,4 @@ server/.env
 
 
 # Publish
-overlay_chat*
+artifacts/
