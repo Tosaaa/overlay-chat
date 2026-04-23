@@ -20,6 +20,8 @@ public sealed class OverlaySettings
     public string ToggleHotkey { get; set; } = "Ctrl+Shift+O";
     public bool StartClickThrough { get; set; }
     public bool FocusInputWithEnter { get; set; }
+    public bool NotificationSoundEnabled { get; set; } = true;
+    public double NotificationSoundVolume { get; set; } = 0.2;
 }
 
 public sealed class AppearanceSettings

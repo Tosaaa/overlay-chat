@@ -5,6 +5,7 @@ using System.IO;
 using System.Runtime.InteropServices;
 using System.Runtime.CompilerServices;
 using System.Text;
+using System.Linq;
 using System.Windows;
 using System.Windows.Interop;
 using System.Windows.Input;
@@ -47,6 +48,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private readonly CancellationTokenSource _cts = new();
     private readonly ClientSettings _settings;
     private readonly string _settingsPath;
+    private readonly MediaPlayer _notificationPlayer = new();
+    private readonly string _notificationSoundPath;
 
     private HwndSource? _hwndSource;
     private IntPtr _windowHandle;
@@ -54,7 +57,11 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private bool _toggleHotkeyRegistered;
     private bool _focusInputHotkeyRegistered;
     private bool _isSettingsOpen;
+    private bool _isUsersOpen;
     private bool _focusInputWithEnterEnabled;
+    private bool _notificationSoundLoaded;
+    private bool _notificationSoundEnabled = true;
+    private double _notificationVolume = 0.2;
     private double _overlayOpacity = 0.9;
     private double _chatFontSize = 14;
     private string _chatTextColorHex = "#FFFFFFFF";
@@ -65,6 +72,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private double _chatColorB = 255;
 
     public ObservableCollection<ChatMessage> Messages { get; } = new();
+    public ObservableCollection<string> OnlineUsers { get; } = new();
 
     public bool IsSettingsOpen
     {
@@ -81,6 +89,35 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         }
     }
 
+    public bool IsUsersOpen
+    {
+        get => _isUsersOpen;
+        set
+        {
+            if (_isUsersOpen == value)
+            {
+                return;
+            }
+
+            _isUsersOpen = value;
+            OnPropertyChanged();
+        }
+    }
+
+    public bool ClickThroughEnabled
+    {
+        get => _isClickThrough;
+        set
+        {
+            if (_isClickThrough == value)
+            {
+                return;
+            }
+
+            SetClickThrough(value);
+        }
+    }
+
     public bool FocusInputWithEnterEnabled
     {
         get => _focusInputWithEnterEnabled;
@@ -93,6 +130,38 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
             _focusInputWithEnterEnabled = value;
             OnPropertyChanged();
+        }
+    }
+
+    public bool NotificationSoundEnabled
+    {
+        get => _notificationSoundEnabled;
+        set
+        {
+            if (_notificationSoundEnabled == value)
+            {
+                return;
+            }
+
+            _notificationSoundEnabled = value;
+            OnPropertyChanged();
+        }
+    }
+
+    public double NotificationVolume
+    {
+        get => _notificationVolume;
+        set
+        {
+            var clamped = Math.Clamp(value, 0.0, 1.0);
+            if (Math.Abs(_notificationVolume - clamped) < 0.001)
+            {
+                return;
+            }
+
+            _notificationVolume = clamped;
+            OnPropertyChanged();
+            UpdateNotificationVolume();
         }
     }
 
@@ -218,7 +287,9 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     public MainWindow()
     {
         _settingsPath = Path.Combine(AppContext.BaseDirectory, "appsettings.json");
+        _notificationSoundPath = Path.Combine(AppContext.BaseDirectory, "assets", "drop_002.ogg");
         _settings = SettingsLoader.Load(_settingsPath);
+        ApplyNotificationSettings(_settings.Overlay);
         ApplyAppearanceSettings(_settings.Appearance);
 
         InitializeComponent();
@@ -233,6 +304,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     private async void OnLoaded(object sender, RoutedEventArgs e)
     {
+        TryInitializeNotificationSound();
+
         var uri = BuildConnectionUri(_settings.Connection);
 
         try
@@ -246,7 +319,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
             _ = _chatClient.ReceiveLoopAsync(async msg =>
             {
-                await Dispatcher.InvokeAsync(() => Messages.Add(msg));
+                await Dispatcher.InvokeAsync(() => HandleIncomingMessage(msg));
             }, _cts.Token);
         }
         catch
@@ -294,6 +367,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     {
         _cts.Cancel();
         Messages.CollectionChanged -= OnMessagesCollectionChanged;
+        _notificationPlayer.Close();
 
         if (_toggleHotkeyRegistered && _windowHandle != IntPtr.Zero)
         {
@@ -431,6 +505,11 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     private void SetClickThrough(bool enabled)
     {
+        if (_isClickThrough == enabled)
+        {
+            return;
+        }
+
         if (_windowHandle == IntPtr.Zero)
         {
             return;
@@ -452,6 +531,14 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         _ = SetWindowPos(_windowHandle, IntPtr.Zero, 0, 0, 0, 0, SwpNoMove | SwpNoSize | SwpNoZOrder | SwpNoActivate);
 
         _isClickThrough = enabled;
+        OnPropertyChanged(nameof(ClickThroughEnabled));
+
+        if (enabled)
+        {
+            IsSettingsOpen = false;
+            IsUsersOpen = false;
+        }
+
         Messages.Add(new ChatMessage
         {
             Name = "system",
@@ -485,7 +572,20 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             return;
         }
 
+        IsUsersOpen = false;
         IsSettingsOpen = !IsSettingsOpen;
+    }
+
+    private void UsersButton_OnClick(object sender, RoutedEventArgs e)
+    {
+        if (_isClickThrough)
+        {
+            Messages.Add(new ChatMessage { Name = "system", Text = "Disable click-through before opening user list." });
+            return;
+        }
+
+        IsSettingsOpen = false;
+        IsUsersOpen = !IsUsersOpen;
     }
 
     private void SaveSettingsButton_OnClick(object sender, RoutedEventArgs e)
@@ -494,16 +594,24 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         _settings.Appearance.FontSize = ChatFontSize;
         _settings.Appearance.TextColor = ChatTextColorHex;
         _settings.Overlay.FocusInputWithEnter = FocusInputWithEnterEnabled;
+        _settings.Overlay.StartClickThrough = ClickThroughEnabled;
+        _settings.Overlay.NotificationSoundEnabled = NotificationSoundEnabled;
+        _settings.Overlay.NotificationSoundVolume = NotificationVolume;
         UpdateFocusInputHotkeyRegistration();
 
         SettingsLoader.Save(_settingsPath, _settings);
-        Messages.Add(new ChatMessage { Name = "system", Text = "Appearance settings saved." });
+        Messages.Add(new ChatMessage { Name = "system", Text = "Settings saved." });
         IsSettingsOpen = false;
     }
 
     private void CloseSettingsButton_OnClick(object sender, RoutedEventArgs e)
     {
         IsSettingsOpen = false;
+    }
+
+    private void CloseUsersButton_OnClick(object sender, RoutedEventArgs e)
+    {
+        IsUsersOpen = false;
     }
 
     private void EnterChatInputMode()
@@ -523,9 +631,93 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         {
             Activate();
             IsSettingsOpen = false;
+            IsUsersOpen = false;
             InputBox.Focus();
             InputBox.CaretIndex = InputBox.Text.Length;
         });
+    }
+
+    private void HandleIncomingMessage(ChatMessage msg)
+    {
+        if (string.Equals(msg.Type, "presence", StringComparison.OrdinalIgnoreCase))
+        {
+            UpdateOnlineUsers(msg.Users ?? Enumerable.Empty<string>());
+            return;
+        }
+
+        if (string.Equals(msg.Type, "chat", StringComparison.OrdinalIgnoreCase))
+        {
+            PlayNotificationIfUnfocused();
+        }
+
+        Messages.Add(msg);
+    }
+
+    private void TryInitializeNotificationSound()
+    {
+        if (_notificationSoundLoaded || !File.Exists(_notificationSoundPath))
+        {
+            return;
+        }
+
+        try
+        {
+            _notificationPlayer.Open(new Uri(_notificationSoundPath));
+            UpdateNotificationVolume();
+            _notificationSoundLoaded = true;
+        }
+        catch
+        {
+            _notificationSoundLoaded = false;
+        }
+    }
+
+    private void PlayNotificationIfUnfocused()
+    {
+        if (IsActive || !_notificationSoundLoaded || !NotificationSoundEnabled)
+        {
+            return;
+        }
+
+        try
+        {
+            _notificationPlayer.Stop();
+            _notificationPlayer.Position = TimeSpan.Zero;
+            _notificationPlayer.Play();
+        }
+        catch
+        {
+            // Ignore notification playback failures to avoid interrupting chat flow.
+        }
+    }
+
+    private void ApplyNotificationSettings(OverlaySettings overlay)
+    {
+        NotificationSoundEnabled = overlay.NotificationSoundEnabled;
+        NotificationVolume = overlay.NotificationSoundVolume;
+    }
+
+    private void UpdateNotificationVolume()
+    {
+        _notificationPlayer.Volume = NotificationVolume;
+    }
+
+    private void UpdateOnlineUsers(IEnumerable<string> users)
+    {
+        OnlineUsers.Clear();
+        foreach (var name in BuildUserDisplayNames(users))
+        {
+            OnlineUsers.Add(name);
+        }
+    }
+
+    private static IEnumerable<string> BuildUserDisplayNames(IEnumerable<string> users)
+    {
+        return users
+            .Select(u => string.IsNullOrWhiteSpace(u) ? "anon" : u.Trim())
+            .GroupBy(u => u, StringComparer.OrdinalIgnoreCase)
+            .OrderBy(g => g.Key, StringComparer.OrdinalIgnoreCase)
+            .Select(g => g.Count() == 1 ? g.Key : $"{g.Key} x{g.Count()}");
     }
 
     private async Task SendCurrentInputAsync()

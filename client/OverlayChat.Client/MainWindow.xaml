@@ -52,6 +52,17 @@
                         FontWeight="Bold"
                         Content="S"
                         Click="SettingsButton_OnClick" />
+                <Button x:Name="UsersButton"
+                    DockPanel.Dock="Right"
+                    Width="24"
+                    Height="24"
+                    Margin="8,0,0,0"
+                    Background="#33FFFFFF"
+                    BorderBrush="#55FFFFFF"
+                    Foreground="White"
+                    FontWeight="Bold"
+                    Content="U"
+                    Click="UsersButton_OnClick" />
             </DockPanel>
 
             <ScrollViewer x:Name="MessagesScrollViewer" Grid.Row="1" VerticalScrollBarVisibility="Auto">
@@ -83,7 +94,7 @@
                          KeyDown="InputBox_OnKeyDown" />
             </DockPanel>
 
-                <Border Grid.RowSpan="3"
+            <Border Grid.RowSpan="3"
                     Width="230"
                     HorizontalAlignment="Right"
                     VerticalAlignment="Stretch"
@@ -141,6 +152,24 @@
                                       Foreground="#E6FFFFFF"
                                       IsChecked="{Binding FocusInputWithEnterEnabled, Mode=TwoWay}"
                                       Content="Global Enter opens chat input" />
+
+                            <CheckBox Margin="0,8,0,0"
+                                      Foreground="#E6FFFFFF"
+                                      IsChecked="{Binding ClickThroughEnabled, Mode=TwoWay}"
+                                      Content="Click-through mode" />
+
+                                <CheckBox Margin="0,8,0,0"
+                                      Foreground="#E6FFFFFF"
+                                      IsChecked="{Binding NotificationSoundEnabled, Mode=TwoWay}"
+                                      Content="Notification sound" />
+
+                                <TextBlock Foreground="#E6FFFFFF" Margin="0,8,0,4" Text="Notification volume" />
+                                <Slider Minimum="0"
+                                    Maximum="1"
+                                    SmallChange="0.05"
+                                    TickFrequency="0.1"
+                                    IsSnapToTickEnabled="False"
+                                    Value="{Binding NotificationVolume, Mode=TwoWay}" />
                     </StackPanel>
                     </ScrollViewer>
 
@@ -155,6 +184,44 @@
                         Content="Close"
                         Click="CloseSettingsButton_OnClick" />
                     </DockPanel>
+                </Grid>
+            </Border>
+
+            <Border Grid.RowSpan="3"
+                    Width="190"
+                    HorizontalAlignment="Right"
+                    VerticalAlignment="Top"
+                    Margin="0,32,0,0"
+                    Background="#EE1A1A1A"
+                    BorderBrush="#66FFFFFF"
+                    BorderThickness="1"
+                    CornerRadius="8"
+                    Padding="10"
+                    Visibility="{Binding IsUsersOpen, Converter={StaticResource BoolToVisibility}}">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+
+                    <TextBlock Grid.Row="0"
+                               Foreground="White"
+                               FontWeight="SemiBold"
+                               Text="Online Users" />
+
+                    <ListBox Grid.Row="1"
+                             Margin="0,8,0,0"
+                             Background="#22000000"
+                             BorderBrush="#55FFFFFF"
+                             Foreground="#E6FFFFFF"
+                             ItemsSource="{Binding OnlineUsers}" />
+
+                    <Button Grid.Row="2"
+                            Margin="0,8,0,0"
+                            Height="28"
+                            Content="Close"
+                            Click="CloseUsersButton_OnClick" />
                 </Grid>
             </Border>
         </Grid>

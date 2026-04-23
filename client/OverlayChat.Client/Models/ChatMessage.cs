@@ -7,4 +7,5 @@ public sealed class ChatMessage
     public string Name { get; set; } = "anon";
     public string Text { get; set; } = string.Empty;
     public DateTime Timestamp { get; set; } = DateTime.UtcNow;
+    public List<string>? Users { get; set; }
 }
