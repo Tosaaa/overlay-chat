@@ -19,6 +19,7 @@ dotnet publish "$PROJECT_PATH" \
   --self-contained false \
   -p:PublishSingleFile=false \
   -p:PublishTrimmed=false \
+  -p:DebugType=none \
   -o "$OUTPUT_DIR"
 
 if [[ "$USE_LOCAL_APPSETTINGS" != "1" && -f "$SAFE_SETTINGS_PATH" ]]; then
