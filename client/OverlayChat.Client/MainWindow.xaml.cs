@@ -53,6 +53,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     private HwndSource? _hwndSource;
     private IntPtr _windowHandle;
+    private IntPtr _previousForegroundWindow;
     private bool _isClickThrough;
     private bool _toggleHotkeyRegistered;
     private bool _focusInputHotkeyRegistered;
@@ -287,7 +288,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     public MainWindow()
     {
         _settingsPath = Path.Combine(AppContext.BaseDirectory, "appsettings.json");
-        _notificationSoundPath = Path.Combine(AppContext.BaseDirectory, "assets", "drop_002.ogg");
+        _notificationSoundPath = Path.Combine(AppContext.BaseDirectory, "assets", "drop_002.mp3");
         _settings = SettingsLoader.Load(_settingsPath);
         ApplyNotificationSettings(_settings.Overlay);
         ApplyAppearanceSettings(_settings.Appearance);
@@ -298,6 +299,16 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         SourceInitialized += OnSourceInitialized;
         Loaded += OnLoaded;
         Closed += OnClosed;
+        Deactivated += OnWindowDeactivated;
+    }
+
+    private void OnWindowDeactivated(object? sender, EventArgs e)
+    {
+        if (_isClickThrough)
+        {
+            ApplyClickThroughStyle(true);
+            _previousForegroundWindow = IntPtr.Zero;
+        }
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
@@ -503,13 +514,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         SetClickThrough(!_isClickThrough);
     }
 
-    private void SetClickThrough(bool enabled)
+    private void ApplyClickThroughStyle(bool transparent)
     {
-        if (_isClickThrough == enabled)
-        {
-            return;
-        }
-
         if (_windowHandle == IntPtr.Zero)
         {
             return;
@@ -518,7 +524,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         var exStyle = GetWindowLongPtr(_windowHandle, GwlExStyle).ToInt64();
         exStyle |= WsExLayered;
 
-        if (enabled)
+        if (transparent)
         {
             exStyle |= WsExTransparent;
         }
@@ -529,8 +535,18 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
         _ = SetWindowLongPtr(_windowHandle, GwlExStyle, new IntPtr(exStyle));
         _ = SetWindowPos(_windowHandle, IntPtr.Zero, 0, 0, 0, 0, SwpNoMove | SwpNoSize | SwpNoZOrder | SwpNoActivate);
+    }
+
+    private void SetClickThrough(bool enabled)
+    {
+        if (_isClickThrough == enabled)
+        {
+            return;
+        }
 
         _isClickThrough = enabled;
+        ApplyClickThroughStyle(enabled && !InputBox.IsKeyboardFocusWithin);
+
         OnPropertyChanged(nameof(ClickThroughEnabled));
 
         if (enabled)
@@ -622,13 +638,13 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             return;
         }
 
-        if (_isClickThrough)
-        {
-            SetClickThrough(false);
-        }
-
         Dispatcher.Invoke(() =>
         {
+            if (_isClickThrough)
+            {
+                _previousForegroundWindow = GetForegroundWindow();
+                ApplyClickThroughStyle(false);
+            }
             Activate();
             IsSettingsOpen = false;
             IsUsersOpen = false;
@@ -647,7 +663,11 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
         if (string.Equals(msg.Type, "chat", StringComparison.OrdinalIgnoreCase))
         {
-            PlayNotificationIfUnfocused();
+            // Only play sound if the message is from someone else
+            if (!string.Equals(msg.Name, _settings.Connection.Name, StringComparison.OrdinalIgnoreCase))
+            {
+                PlayNotificationIfUnfocused();
+            }
         }
 
         Messages.Add(msg);
@@ -914,4 +934,10 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         int cx,
         int cy,
         uint uFlags);
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr GetForegroundWindow();
+
+    [DllImport("user32.dll")]
+    private static extern bool SetForegroundWindow(IntPtr hWnd);
 }
